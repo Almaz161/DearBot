@@ -5,7 +5,7 @@
  */
 import WebSocket from "ws";
 import { MusicService } from "../src/features/music.js";
-import { startOverlayServer } from "../src/overlay/server.js";
+import { startWebServer } from "../src/overlay/server.js";
 import { setLogLevel } from "../src/logger.js";
 
 function fakeTrack(id: string, videoId: string, requestedBy: string) {
@@ -44,9 +44,10 @@ async function main(): Promise<void> {
   tm.setTrack(t1);
   tm.enqueue(t2);
 
-  const overlay = await startOverlayServer({ port: 0, token: "smoke", music: tm });
+  const overlay = await startWebServer({ port: 0, overlayToken: "smoke", publicUrl: "" });
+  overlay.attachMusic(tm);
   // Re-read port from URL (port=0 means OS-assigned).
-  const parsed = new URL(overlay.url);
+  const parsed = new URL(overlay.overlayUrl);
   const port = parsed.port;
 
   const failures: string[] = [];

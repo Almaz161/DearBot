@@ -2,7 +2,7 @@ import { ApiClient } from "@twurple/api";
 import { ChatClient } from "@twurple/chat";
 import { EventSubWsListener } from "@twurple/eventsub-ws";
 
-import { loadConfig } from "./config.js";
+import { loadConfig, type AppConfig } from "./config.js";
 import { setLogLevel, makeLogger } from "./logger.js";
 import { BotDatabase, type RedemptionRow } from "./db.js";
 import { createAuthProvider, loadAllTokens, tokensToAccessToken } from "./twitch/auth.js";
@@ -10,20 +10,100 @@ import { RedemptionLogger } from "./features/redemptions.js";
 import { MusicService } from "./features/music.js";
 import { CommandRegistry } from "./commands/registry.js";
 import { registerBuiltinCommands } from "./commands/builtin.js";
-import { startOverlayServer } from "./overlay/server.js";
+import { startWebServer, type WebServerHandle } from "./overlay/server.js";
+import { createSetupRouter } from "./setup/router.js";
+
+type RuntimeServices = {
+  stop: () => Promise<void>;
+};
 
 async function main(): Promise<void> {
-  const config = loadConfig();
-  setLogLevel(config.logLevel);
+  const initialConfig = loadConfig();
+  setLogLevel(initialConfig.logLevel);
   const log = makeLogger("main");
 
-  log.info("starting twitch bot…");
+  log.info(`starting DearBot — ready=${initialConfig.ready}`);
+
+  const web: WebServerHandle = await startWebServer({
+    port: initialConfig.web.port,
+    overlayToken: initialConfig.web.overlayToken,
+    publicUrl: initialConfig.web.publicUrl,
+  });
+
+  let runtime: RuntimeServices | null = null;
+
+  const reload = async (): Promise<void> => {
+    log.info("config changed — reloading runtime services…");
+    if (runtime) {
+      try {
+        await runtime.stop();
+      } catch (err) {
+        log.warn(`runtime stop error: ${(err as Error).message}`);
+      }
+      runtime = null;
+      web.detachMusic();
+    }
+    const cfg = loadConfig();
+    if (!cfg.ready) {
+      log.info("not ready yet (missing Twitch credentials or channel) — waiting on the setup wizard.");
+      return;
+    }
+    try {
+      runtime = await startRuntime(cfg, web);
+      log.info("runtime started.");
+    } catch (err) {
+      log.error(`runtime failed to start: ${(err as Error).stack ?? (err as Error).message}`);
+    }
+  };
+
+  web.app.use(
+    createSetupRouter({
+      store: initialConfig.store,
+      tokensFile: initialConfig.twitch.tokensFile,
+      onConfigChange: reload,
+    }),
+  );
+
+  // Try to start the runtime immediately if everything is configured.
+  if (initialConfig.ready && Object.keys(loadAllTokens(initialConfig.twitch.tokensFile)).length > 0) {
+    try {
+      runtime = await startRuntime(initialConfig, web);
+    } catch (err) {
+      log.error(`initial runtime start failed: ${(err as Error).message}`);
+      log.error("open the setup wizard to fix the configuration.");
+    }
+  } else {
+    log.info(`open the setup wizard at: ${web.setupUrl}`);
+  }
+
+  const shutdown = async (): Promise<void> => {
+    log.info("shutting down…");
+    if (runtime) {
+      try {
+        await runtime.stop();
+      } catch (err) {
+        log.warn(`runtime stop error: ${(err as Error).message}`);
+      }
+    }
+    try {
+      await web.stop();
+    } catch (err) {
+      log.warn(`web stop error: ${(err as Error).message}`);
+    }
+    process.exit(0);
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
+async function startRuntime(config: AppConfig, web: WebServerHandle): Promise<RuntimeServices> {
+  const log = makeLogger("runtime");
 
   // ---------------- Auth ----------------
   const tokens = loadAllTokens(config.twitch.tokensFile);
   if (Object.keys(tokens).length === 0) {
-    log.error("no tokens found. Run `npm run auth` first to authorize the bot.");
-    process.exit(1);
+    throw new Error("no tokens yet — finish the setup wizard first.");
   }
 
   const authProvider = createAuthProvider(
@@ -34,18 +114,25 @@ async function main(): Promise<void> {
 
   const api = new ApiClient({ authProvider });
 
-  // Resolve channel & bot logins → user IDs, then register tokens by userId.
   const broadcasterUser = await api.users.getUserByName(config.twitch.channel);
-  if (!broadcasterUser) {
-    throw new Error(`Twitch user "${config.twitch.channel}" not found`);
-  }
+  if (!broadcasterUser) throw new Error(`Twitch user "${config.twitch.channel}" not found`);
+
   const botLogin = config.twitch.botLogin || config.twitch.channel;
   const botUser =
     botLogin === config.twitch.channel
       ? broadcasterUser
-      : (await api.users.getUserByName(botLogin)) ?? null;
-  if (!botUser) {
-    throw new Error(`Twitch user "${botLogin}" not found`);
+      : ((await api.users.getUserByName(botLogin)) ?? null);
+  if (!botUser) throw new Error(`Twitch user "${botLogin}" not found`);
+
+  if (!tokens[broadcasterUser.id]) {
+    throw new Error(
+      `no token for broadcaster "${config.twitch.channel}" (id ${broadcasterUser.id}). Re-authorize via the setup wizard.`,
+    );
+  }
+  if (!tokens[botUser.id]) {
+    throw new Error(
+      `no token for bot "${botLogin}" (id ${botUser.id}). Re-authorize as that account in the wizard, or unset the bot login.`,
+    );
   }
 
   for (const [storedUserId, t] of Object.entries(tokens)) {
@@ -53,19 +140,6 @@ async function main(): Promise<void> {
     if (storedUserId === broadcasterUser.id) intents.push("broadcaster");
     if (storedUserId === botUser.id) intents.push("chat");
     authProvider.addUser(storedUserId, tokensToAccessToken(t), intents);
-  }
-
-  if (!tokens[broadcasterUser.id]) {
-    log.error(
-      `no token for broadcaster "${config.twitch.channel}" (id ${broadcasterUser.id}). Re-run \`npm run auth\` while logged in as that user.`,
-    );
-    process.exit(1);
-  }
-  if (!tokens[botUser.id]) {
-    log.error(
-      `no token for bot "${botLogin}" (id ${botUser.id}). Re-run \`npm run auth\` while logged in as that user.`,
-    );
-    process.exit(1);
   }
 
   // ---------------- DB & feature services ----------------
@@ -83,13 +157,7 @@ async function main(): Promise<void> {
     perUserLimit: config.music.perUserLimit,
   });
 
-  // ---------------- Overlay HTTP/WS server ----------------
-  const overlay = await startOverlayServer({
-    port: config.overlay.port,
-    token: config.overlay.token,
-    music,
-  });
-  log.info(`overlay URL (add as OBS Browser Source): ${overlay.url}`);
+  web.attachMusic(music);
 
   // ---------------- Chat ----------------
   const chat = new ChatClient({
@@ -104,10 +172,7 @@ async function main(): Promise<void> {
   chat.onMessage(async (channel, user, text, msg) => {
     await registry.dispatch(chat, channel, user, text, msg);
   });
-
-  chat.onConnect(() => {
-    log.info(`chat connected as ${botLogin} → #${config.twitch.channel}`);
-  });
+  chat.onConnect(() => log.info(`chat connected as ${botLogin} → #${config.twitch.channel}`));
   chat.onDisconnect((manual, reason) => {
     if (manual) log.info("chat disconnected (manual)");
     else log.warn(`chat disconnected: ${reason?.message ?? "unknown reason"}`);
@@ -117,7 +182,6 @@ async function main(): Promise<void> {
 
   // ---------------- EventSub ----------------
   const eventsub = new EventSubWsListener({ apiClient: api });
-
   eventsub.onUserSocketConnect((userId) => log.info(`eventsub connected for user ${userId}`));
   eventsub.onUserSocketDisconnect((userId, err) =>
     log.warn(`eventsub disconnected for user ${userId}: ${err?.message ?? "clean"}`),
@@ -145,12 +209,14 @@ async function main(): Promise<void> {
       user_input: e.input,
       redeemed_at: e.redemptionDate.toISOString(),
     };
-
     await redemptions.record(row);
 
-    // If this reward is the music-request reward, treat input as a song query.
     if (config.rewards.musicId && e.rewardId === config.rewards.musicId && e.input.trim()) {
-      const result = await music.searchAndQueue(e.input.trim(), e.userName.toLowerCase(), e.userDisplayName);
+      const result = await music.searchAndQueue(
+        e.input.trim(),
+        e.userName.toLowerCase(),
+        e.userDisplayName,
+      );
       try {
         if (result.ok) {
           await chat.say(
@@ -168,43 +234,34 @@ async function main(): Promise<void> {
       }
     }
   };
-
   eventsub.onChannelRedemptionAdd(broadcasterUser.id, handleRedemption);
 
   eventsub.start();
   log.info("eventsub started, subscribed to channel.channel_points_custom_reward_redemption.add");
 
-  // ---------------- Shutdown ----------------
-  const shutdown = async (): Promise<void> => {
-    log.info("shutting down…");
-    try {
-      eventsub.stop();
-    } catch (err) {
-      log.warn(`eventsub stop error: ${(err as Error).message}`);
-    }
-    try {
-      chat.quit();
-    } catch (err) {
-      log.warn(`chat quit error: ${(err as Error).message}`);
-    }
-    try {
-      await overlay.stop();
-    } catch (err) {
-      log.warn(`overlay stop error: ${(err as Error).message}`);
-    }
-    try {
-      db.close();
-    } catch (err) {
-      log.warn(`db close error: ${(err as Error).message}`);
-    }
-    process.exit(0);
+  return {
+    stop: async () => {
+      try {
+        eventsub.stop();
+      } catch (err) {
+        log.warn(`eventsub stop error: ${(err as Error).message}`);
+      }
+      try {
+        chat.quit();
+      } catch (err) {
+        log.warn(`chat quit error: ${(err as Error).message}`);
+      }
+      try {
+        db.close();
+      } catch (err) {
+        log.warn(`db close error: ${(err as Error).message}`);
+      }
+      web.detachMusic();
+    },
   };
-
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
 }
 
 main().catch((err: unknown) => {
-  console.error("[fatal]", err instanceof Error ? err.stack ?? err.message : err);
+  console.error("[fatal]", err instanceof Error ? (err.stack ?? err.message) : err);
   process.exit(1);
 });

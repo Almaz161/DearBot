@@ -1,7 +1,12 @@
 node_modules/
 dist/
+
+# Local data: tokens, sqlite db, csv, runtime config — never commit.
 data/*.db
 data/*.csv
+data/tokens.json
+data/config.json
+
 .env
 .env.local
 *.log

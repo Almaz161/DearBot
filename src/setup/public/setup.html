@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DearBot — Настройка</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #181b22;
+      --panel-2: #1f232c;
+      --border: #2a2f3a;
+      --text: #e6e6e6;
+      --muted: #9aa3b2;
+      --primary: #9d65ff;
+      --primary-hover: #b08aff;
+      --success: #4ade80;
+      --warning: #fbbf24;
+      --error: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    header { text-align: center; margin-bottom: 2rem; }
+    header h1 { margin: 0; font-size: 1.75rem; }
+    header p { margin: .5rem 0 0; color: var(--muted); }
+    .step {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      transition: border-color .2s;
+    }
+    .step.active { border-color: var(--primary); }
+    .step.done { border-color: var(--success); opacity: .9; }
+    .step h2 {
+      margin: 0 0 1rem;
+      font-size: 1.15rem;
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+    }
+    .step .badge {
+      width: 1.6em;
+      height: 1.6em;
+      border-radius: 50%;
+      background: var(--panel-2);
+      display: inline-grid;
+      place-items: center;
+      font-size: .85em;
+      flex-shrink: 0;
+    }
+    .step.done .badge { background: var(--success); color: #0a0a0a; }
+    .step.active .badge { background: var(--primary); color: white; }
+    label { display: block; margin: .75rem 0 .35rem; color: var(--muted); font-size: .875rem; }
+    input[type=text], input[type=password], input[type=url] {
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .65rem .85rem;
+      font: inherit;
+    }
+    input:focus { outline: none; border-color: var(--primary); }
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: .65rem 1.1rem;
+      font: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    button:hover { background: var(--primary-hover); }
+    button.secondary {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    button.secondary:hover { background: #2a2f3a; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .row { display: flex; gap: .5rem; align-items: stretch; margin-top: 1rem; }
+    .row > button { flex-shrink: 0; }
+    code {
+      background: var(--panel-2);
+      padding: .15em .4em;
+      border-radius: 4px;
+      font-size: .9em;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .75rem 1rem;
+      overflow-x: auto;
+      font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+      margin: .75rem 0;
+    }
+    .copy {
+      display: flex;
+      align-items: stretch;
+      gap: .5rem;
+      margin: .5rem 0;
+    }
+    .copy input { flex: 1; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    .copy button { padding: .65rem 1rem; }
+    ol { padding-left: 1.5rem; line-height: 1.7; }
+    ol li { margin-bottom: .4rem; }
+    a { color: var(--primary); }
+    .reward-list {
+      display: grid;
+      gap: .5rem;
+      margin: 1rem 0;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+    .reward {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: .85rem;
+      align-items: center;
+      padding: .65rem .85rem;
+      background: var(--panel-2);
+      border: 1px solid transparent;
+      border-radius: 8px;
+    }
+    .reward.selected-log { border-color: var(--success); }
+    .reward.selected-music { border-color: var(--primary); }
+    .reward .title { font-weight: 500; }
+    .reward .meta { color: var(--muted); font-size: .8rem; }
+    .reward .actions { display: flex; gap: .4rem; }
+    .pill {
+      cursor: pointer;
+      font-size: .75rem;
+      padding: .25rem .6rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      transition: all .15s;
+    }
+    .pill.active.log { background: var(--success); color: #0a0a0a; border-color: var(--success); }
+    .pill.active.music { background: var(--primary); color: white; border-color: var(--primary); }
+    .alert {
+      padding: .65rem .85rem;
+      border-radius: 8px;
+      margin: .75rem 0;
+      font-size: .9rem;
+    }
+    .alert.error { background: rgba(248, 113, 113, .12); border: 1px solid var(--error); color: var(--error); }
+    .alert.info { background: rgba(157, 101, 255, .12); border: 1px solid var(--primary); color: var(--primary); }
+    .alert.success { background: rgba(74, 222, 128, .12); border: 1px solid var(--success); color: var(--success); }
+    .muted { color: var(--muted); }
+    details { margin: .5rem 0; }
+    details summary { cursor: pointer; color: var(--primary); }
+    details > div { padding: .5rem 0 0 1rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>DearBot — Настройка</h1>
+      <p>Один раз пройди мастер, и бот заработает.</p>
+    </header>
+
+    <section class="step" id="step1">
+      <h2><span class="badge">1</span> Создай Twitch-приложение</h2>
+      <p class="muted">У бота должно быть собственное Twitch-приложение, чтобы он мог писать в чат и читать награды. Это бесплатно.</p>
+      <ol>
+        <li>Открой <a href="https://dev.twitch.tv/console/apps/create" target="_blank" rel="noopener">Register Your Application</a></li>
+        <li>Заполни форму:
+          <ul>
+            <li><strong>Name</strong>: например <code>DearBot</code></li>
+            <li><strong>OAuth Redirect URLs</strong>: вставь точно эту ссылку (нажми «Copy» ниже):
+              <div class="copy">
+                <input id="redirect-uri" type="text" readonly />
+                <button class="secondary" data-copy="redirect-uri">Copy</button>
+              </div>
+            </li>
+            <li><strong>Category</strong>: <code>Chat Bot</code></li>
+            <li><strong>Client Type</strong>: <code>Confidential</code></li>
+          </ul>
+        </li>
+        <li>Жми <strong>Create</strong>, на странице приложения скопируй <strong>Client ID</strong>, потом нажми <strong>New Secret</strong> и скопируй <strong>Client Secret</strong>.</li>
+      </ol>
+
+      <label>Client ID</label>
+      <input id="client-id" type="text" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+      <label>Client Secret</label>
+      <input id="client-secret" type="password" placeholder="••••••••••••••••" autocomplete="off" />
+      <label>Логин аккаунта-бота <span class="muted">(опционально — оставь пустым, чтобы бот писал от твоего основного аккаунта)</span></label>
+      <input id="bot-login" type="text" placeholder="dearbot_account" />
+
+      <div class="row">
+        <button id="save-app">Сохранить и продолжить</button>
+        <span id="save-app-status" class="muted" style="align-self: center;"></span>
+      </div>
+    </section>
+
+    <section class="step" id="step2">
+      <h2><span class="badge">2</span> Войди через Twitch</h2>
+      <p class="muted">Откроется вкладка Twitch — нажми <strong>Authorize</strong>. Если бот должен писать от отдельного аккаунта-бота, перед нажатием <em>обязательно</em> залогинься в Twitch под нужным аккаунтом.</p>
+      <div class="row">
+        <button id="login-broadcaster">Войти как стример</button>
+        <button class="secondary" id="login-bot">Войти как бот-аккаунт</button>
+      </div>
+      <p class="muted" style="font-size: .85em; margin-top: .75rem;">Авторизованы: <span id="authorized-list">никто</span></p>
+    </section>
+
+    <section class="step" id="step3">
+      <h2><span class="badge">3</span> Награды Channel Points</h2>
+      <p class="muted">Список загрузится с твоего канала. Поставь зелёную галку «Лог» на наградах, которые хочешь записывать. Фиолетовая «Музыка» — на одной награде (текст из её комментария будет считаться запросом песни).</p>
+      <div id="rewards-error"></div>
+      <div class="reward-list" id="rewards"></div>
+      <div class="row">
+        <button id="reload-rewards" class="secondary">Обновить список</button>
+        <button id="save-rewards">Сохранить</button>
+        <span id="save-rewards-status" class="muted" style="align-self: center;"></span>
+      </div>
+    </section>
+
+    <section class="step" id="step4">
+      <h2><span class="badge">4</span> Google Sheets <span class="muted" style="font-size:.8em; font-weight:normal;">(опционально)</span></h2>
+      <p class="muted">Бот может писать каждую активацию награды в твою Google-таблицу. Полная инструкция со скриптом — в README.</p>
+      <label>Webhook URL <span class="muted">(или пусто, чтобы выключить)</span></label>
+      <input id="sheets-url" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+      <div class="row">
+        <button id="save-sheets">Сохранить</button>
+        <span id="save-sheets-status" class="muted" style="align-self: center;"></span>
+      </div>
+    </section>
+
+    <section class="step" id="step5">
+      <h2><span class="badge">5</span> OBS Browser Source</h2>
+      <p class="muted">Добавь этот URL в OBS как Browser Source (Source → Browser). Поставь галку <strong>«Control audio via OBS»</strong> — иначе зрители не услышат музыку.</p>
+      <div class="copy">
+        <input id="overlay-url" type="text" readonly />
+        <button class="secondary" data-copy="overlay-url">Copy</button>
+      </div>
+      <p class="muted" style="font-size: .85em;">Размер: 1920×1080.</p>
+
+      <div class="alert info" id="finalize-hint" style="display:none">
+        Настройка завершена. Бот сейчас перезапустится — после перезапуска он подключится к Twitch и начнёт работать. На локальной машине, возможно, придётся вручную запустить <code>npm run dev</code> ещё раз; на Railway/Docker всё автоматически.
+      </div>
+      <div class="row">
+        <button id="finalize">Готово, запускаем бота</button>
+        <span id="finalize-status" class="muted" style="align-self: center;"></span>
+      </div>
+    </section>
+
+    <p class="muted" style="text-align:center;font-size:.85em;margin-top:2rem">
+      Если у вкладок OAuth не закрылись автоматически — закрой их руками и обнови эту страницу.
+    </p>
+  </div>
+
+  <script>
+    // ----- helpers -----
+    function $(id) { return document.getElementById(id); }
+    function status(el, text, kind) {
+      el.textContent = text || '';
+      el.style.color = kind === 'error' ? 'var(--error)' : kind === 'success' ? 'var(--success)' : 'var(--muted)';
+    }
+    async function api(method, url, body) {
+      const opts = { method, headers: { 'content-type': 'application/json' } };
+      if (body !== undefined) opts.body = JSON.stringify(body);
+      const res = await fetch(url, opts);
+      const text = await res.text();
+      let json;
+      try { json = text ? JSON.parse(text) : {}; } catch { json = { error: text }; }
+      if (!res.ok) throw new Error(json.error || res.statusText);
+      return json;
+    }
+    function copyButtons() {
+      document.querySelectorAll('[data-copy]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const input = document.getElementById(btn.dataset.copy);
+          input.select();
+          input.setSelectionRange(0, 99999);
+          navigator.clipboard.writeText(input.value).then(() => {
+            const old = btn.textContent;
+            btn.textContent = 'Скопировано';
+            setTimeout(() => { btn.textContent = old; }, 1500);
+          });
+        });
+      });
+    }
+    copyButtons();
+
+    function setStepStatus(stepEl, kind) {
+      stepEl.classList.toggle('done', kind === 'done');
+      stepEl.classList.toggle('active', kind === 'active');
+    }
+
+    let state = null;
+    async function refreshState() {
+      state = await api('GET', '/setup/api/state');
+      $('redirect-uri').value = state.redirectUri;
+      $('overlay-url').value = state.overlayUrl;
+      $('authorized-list').textContent = state.hasTokens
+        ? state.authorizedUsers.map(u => u.userId).join(', ')
+        : 'никто';
+
+      setStepStatus($('step1'), state.hasClientCreds ? 'done' : 'active');
+      setStepStatus($('step2'), !state.hasClientCreds ? '' : state.hasTokens ? 'done' : 'active');
+      setStepStatus($('step3'), !state.hasTokens ? '' : state.rewardCount > 0 || state.musicRewardId ? 'done' : 'active');
+      setStepStatus($('step4'), state.googleSheetsWebhook ? 'done' : '');
+      setStepStatus($('step5'), state.ready ? 'active' : '');
+
+      if (state.googleSheetsWebhook) $('sheets-url').value = state.googleSheetsWebhook;
+
+      // Auto-load rewards when this step becomes available.
+      if (state.hasTokens && !rewardsCache) {
+        loadRewards().catch(() => {});
+      }
+    }
+
+    // ----- step 1: twitch app -----
+    $('save-app').addEventListener('click', async () => {
+      const clientId = $('client-id').value.trim();
+      const clientSecret = $('client-secret').value.trim();
+      const botLogin = $('bot-login').value.trim();
+      if (!clientId || !clientSecret) {
+        status($('save-app-status'), 'Заполни Client ID и Client Secret', 'error');
+        return;
+      }
+      $('save-app').disabled = true;
+      try {
+        await api('POST', '/setup/api/twitch-app', { clientId, clientSecret, botLogin, publicUrl: location.origin });
+        status($('save-app-status'), 'Сохранено', 'success');
+        await refreshState();
+      } catch (err) {
+        status($('save-app-status'), err.message, 'error');
+      } finally {
+        $('save-app').disabled = false;
+      }
+    });
+
+    // ----- step 2: oauth -----
+    function openOauthWindow() {
+      const w = window.open('/setup/oauth/start', 'oauth', 'width=520,height=720');
+      const onMsg = async (e) => {
+        if (e.data && e.data.type === 'dearbot-oauth') {
+          window.removeEventListener('message', onMsg);
+          rewardsCache = null;
+          await refreshState();
+          if (state.hasTokens) {
+            await loadRewards();
+          }
+        }
+      };
+      window.addEventListener('message', onMsg);
+      // Fallback poll in case postMessage is blocked.
+      const poll = setInterval(async () => {
+        if (w && w.closed) {
+          clearInterval(poll);
+          window.removeEventListener('message', onMsg);
+          rewardsCache = null;
+          await refreshState();
+        }
+      }, 800);
+    }
+    $('login-broadcaster').addEventListener('click', openOauthWindow);
+    $('login-bot').addEventListener('click', openOauthWindow);
+
+    // ----- step 3: rewards -----
+    let rewardsCache = null;
+    async function loadRewards() {
+      const el = $('rewards');
+      el.innerHTML = '<p class="muted">Загружаю…</p>';
+      $('rewards-error').innerHTML = '';
+      try {
+        const r = await api('GET', '/setup/api/rewards');
+        rewardsCache = r;
+        renderRewards(r);
+      } catch (err) {
+        el.innerHTML = '';
+        $('rewards-error').innerHTML = '<div class="alert error">' + err.message + '</div>';
+      }
+    }
+    function renderRewards(r) {
+      const el = $('rewards');
+      el.innerHTML = '';
+      const logged = new Set(r.loggedRewardIds);
+      let music = r.musicRewardId;
+      if (r.rewards.length === 0) {
+        el.innerHTML = '<p class="muted">На канале пока нет custom-наград Channel Points. Создай их в <a target="_blank" rel="noopener" href="https://dashboard.twitch.tv/community/channel-points/rewards">Creator Dashboard</a>, затем нажми «Обновить список».</p>';
+        return;
+      }
+      for (const reward of r.rewards) {
+        const row = document.createElement('div');
+        row.className = 'reward';
+        row.dataset.id = reward.id;
+        if (logged.has(reward.id)) row.classList.add('selected-log');
+        if (music === reward.id) row.classList.add('selected-music');
+        row.innerHTML = `
+          <div></div>
+          <div>
+            <div class="title">${escapeHtml(reward.title)}</div>
+            <div class="meta">${reward.cost} pts${reward.userInputRequired ? ' · с комментарием' : ''}${reward.isEnabled ? '' : ' · ВЫКЛ'}</div>
+          </div>
+          <div class="actions">
+            <button class="pill log" type="button" data-toggle="log">Лог</button>
+            <button class="pill music" type="button" data-toggle="music">Музыка</button>
+          </div>
+        `;
+        if (logged.has(reward.id)) row.querySelector('[data-toggle=log]').classList.add('active', 'log');
+        if (music === reward.id) row.querySelector('[data-toggle=music]').classList.add('active', 'music');
+
+        row.querySelector('[data-toggle=log]').addEventListener('click', () => {
+          if (logged.has(reward.id)) logged.delete(reward.id); else logged.add(reward.id);
+          renderRewards({ ...r, loggedRewardIds: [...logged], musicRewardId: music });
+          rewardsCache = { ...r, loggedRewardIds: [...logged], musicRewardId: music };
+        });
+        row.querySelector('[data-toggle=music]').addEventListener('click', () => {
+          music = music === reward.id ? '' : reward.id;
+          renderRewards({ ...r, loggedRewardIds: [...logged], musicRewardId: music });
+          rewardsCache = { ...r, loggedRewardIds: [...logged], musicRewardId: music };
+        });
+        el.appendChild(row);
+      }
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    $('reload-rewards').addEventListener('click', loadRewards);
+    $('save-rewards').addEventListener('click', async () => {
+      if (!rewardsCache) {
+        status($('save-rewards-status'), 'Сначала нажми «Обновить список»', 'error');
+        return;
+      }
+      $('save-rewards').disabled = true;
+      try {
+        await api('POST', '/setup/api/rewards', {
+          loggedRewardIds: rewardsCache.loggedRewardIds,
+          musicRewardId: rewardsCache.musicRewardId,
+        });
+        status($('save-rewards-status'), 'Сохранено', 'success');
+        await refreshState();
+      } catch (err) {
+        status($('save-rewards-status'), err.message, 'error');
+      } finally {
+        $('save-rewards').disabled = false;
+      }
+    });
+
+    // ----- step 4: sheets -----
+    $('save-sheets').addEventListener('click', async () => {
+      const url = $('sheets-url').value.trim();
+      $('save-sheets').disabled = true;
+      try {
+        await api('POST', '/setup/api/sheets', { url });
+        status($('save-sheets-status'), 'Сохранено', 'success');
+        await refreshState();
+      } catch (err) {
+        status($('save-sheets-status'), err.message, 'error');
+      } finally {
+        $('save-sheets').disabled = false;
+      }
+    });
+
+    // ----- step 5: finalize -----
+    $('finalize').addEventListener('click', async () => {
+      $('finalize').disabled = true;
+      $('finalize-hint').style.display = 'block';
+      try {
+        await api('POST', '/setup/api/finalize', {});
+        status($('finalize-status'), 'Перезапускаю бота…', 'success');
+      } catch (err) {
+        status($('finalize-status'), err.message, 'error');
+      }
+    });
+
+    refreshState().catch(err => {
+      document.body.innerHTML = '<pre>Failed to load setup state: ' + err.message + '</pre>';
+    });
+  </script>
+</body>
+</html>

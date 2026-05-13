@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/src/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node --input-type=module -e \"import { cpSync } from 'node:fs'; cpSync('src/overlay/public', 'dist/src/overlay/public', { recursive: true });\"",
+    "build": "tsc -p tsconfig.json && node --input-type=module -e \"import { cpSync } from 'node:fs'; cpSync('src/overlay/public', 'dist/src/overlay/public', { recursive: true }); cpSync('src/setup/public', 'dist/src/setup/public', { recursive: true });\"",
     "start": "node dist/src/index.js",
     "dev": "tsx watch src/index.ts",
     "auth": "tsx scripts/auth.ts",

@@ -21,6 +21,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/src/overlay/public ./src/overlay/public
+COPY --from=build /app/src/setup/public ./src/setup/public
 
 # Mount /app/data as a volume to persist tokens, SQLite db, and CSV.
 VOLUME ["/app/data"]
