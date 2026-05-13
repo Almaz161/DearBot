@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Twitch Bot Overlay</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Inter", system-ui, sans-serif;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        color: white;
+        overflow: hidden;
+        width: 100vw;
+        height: 100vh;
+      }
+      #player {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      #card {
+        position: absolute;
+        left: 24px;
+        bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 20px;
+        background: rgba(20, 20, 28, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 14px;
+        backdrop-filter: blur(12px);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+        max-width: 520px;
+        transition: opacity 0.4s ease, transform 0.4s ease;
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      #card.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      #thumb {
+        width: 56px;
+        height: 56px;
+        border-radius: 8px;
+        object-fit: cover;
+        flex-shrink: 0;
+        background: #222;
+      }
+      #info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        overflow: hidden;
+      }
+      #title {
+        font-weight: 600;
+        font-size: 15px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 380px;
+      }
+      #meta {
+        font-size: 12px;
+        opacity: 0.7;
+      }
+      #pill {
+        font-size: 10px;
+        font-weight: 700;
+        background: #9146ff;
+        padding: 3px 6px;
+        border-radius: 6px;
+        margin-right: 6px;
+        letter-spacing: 0.5px;
+      }
+      #status {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        font-size: 11px;
+        opacity: 0.4;
+        font-family: ui-monospace, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="player"></div>
+    <div id="card">
+      <img id="thumb" alt="" />
+      <div id="info">
+        <div id="title">…</div>
+        <div id="meta"><span id="pill">NOW PLAYING</span><span id="requester"></span></div>
+      </div>
+    </div>
+    <div id="status">disconnected</div>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script>
+      // eslint-disable-next-line no-undef
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("token");
+
+      let player = null;
+      let playerReady = false;
+      let currentVideoId = null;
+      let lastState = null;
+
+      const card = document.getElementById("card");
+      const thumb = document.getElementById("thumb");
+      const titleEl = document.getElementById("title");
+      const requesterEl = document.getElementById("requester");
+      const statusEl = document.getElementById("status");
+
+      function onYouTubeIframeAPIReady() {
+        // eslint-disable-next-line no-undef
+        player = new YT.Player("player", {
+          height: "1",
+          width: "1",
+          playerVars: { autoplay: 1, controls: 0, modestbranding: 1 },
+          events: {
+            onReady: () => {
+              playerReady = true;
+              if (lastState) applyState(lastState);
+            },
+            onStateChange: (event) => {
+              // YT.PlayerState.ENDED === 0
+              if (event.data === 0) {
+                wsSend({ type: "track_ended" });
+              }
+            },
+            onError: () => {
+              wsSend({ type: "track_ended" });
+            },
+          },
+        });
+      }
+      window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
+
+      let ws = null;
+      let reconnectTimer = null;
+
+      function connect() {
+        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const url = `${proto}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
+        ws = new WebSocket(url);
+        statusEl.textContent = "connecting";
+
+        ws.addEventListener("open", () => {
+          statusEl.textContent = "connected";
+          ws.send(JSON.stringify({ type: "request_state" }));
+        });
+        ws.addEventListener("close", () => {
+          statusEl.textContent = "disconnected";
+          if (reconnectTimer) clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(connect, 2000);
+        });
+        ws.addEventListener("error", () => {
+          statusEl.textContent = "error";
+        });
+        ws.addEventListener("message", (event) => {
+          let msg;
+          try {
+            msg = JSON.parse(event.data);
+          } catch {
+            return;
+          }
+          if (msg.type === "state") {
+            lastState = msg.state;
+            if (playerReady) applyState(msg.state);
+            else renderCard(msg.state);
+          }
+        });
+      }
+
+      function wsSend(obj) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(obj));
+        }
+      }
+
+      function renderCard(state) {
+        const t = state.current;
+        if (!t) {
+          card.classList.remove("visible");
+          return;
+        }
+        titleEl.textContent = `${t.author} — ${t.title}`;
+        requesterEl.textContent = `от ${t.requestedByDisplay}`;
+        thumb.src = t.thumbnail || `https://i.ytimg.com/vi/${t.videoId}/hqdefault.jpg`;
+        card.classList.add("visible");
+      }
+
+      function applyState(state) {
+        renderCard(state);
+        if (!playerReady) return;
+
+        player.setVolume(state.volume);
+
+        if (!state.current) {
+          currentVideoId = null;
+          player.stopVideo();
+          return;
+        }
+
+        if (state.current.videoId !== currentVideoId) {
+          currentVideoId = state.current.videoId;
+          player.loadVideoById(state.current.videoId);
+        }
+
+        if (state.paused) {
+          player.pauseVideo();
+        } else {
+          player.playVideo();
+        }
+      }
+
+      connect();
+    </script>
+  </body>
+</html>

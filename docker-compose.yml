@@ -1,0 +1,11 @@
+services:
+  bot:
+    build: .
+    container_name: twitch-bot
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      # Map host port → container overlay port (defaults to 4488).
+      - "${OVERLAY_PORT:-4488}:${OVERLAY_PORT:-4488}"
+    volumes:
+      - ./data:/app/data
