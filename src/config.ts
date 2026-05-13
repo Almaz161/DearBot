@@ -23,6 +23,7 @@ const Schema = z.object({
   OVERLAY_TOKEN: z.string().default(""),
 
   DISCORD_WEBHOOK_URL: z.string().default(""),
+  GOOGLE_SHEETS_WEBHOOK: z.string().default(""),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
@@ -48,6 +49,7 @@ export type AppConfig = {
     token: string;
   };
   discordWebhookUrl: string;
+  googleSheetsWebhook: string;
   logLevel: "debug" | "info" | "warn" | "error";
 };
 
@@ -87,6 +89,7 @@ export function loadConfig(): AppConfig {
       token: overlayToken,
     },
     discordWebhookUrl: env.DISCORD_WEBHOOK_URL.trim(),
+    googleSheetsWebhook: env.GOOGLE_SHEETS_WEBHOOK.trim(),
     logLevel: env.LOG_LEVEL,
   };
 }

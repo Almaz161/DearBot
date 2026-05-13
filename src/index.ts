@@ -71,12 +71,12 @@ async function main(): Promise<void> {
   // ---------------- DB & feature services ----------------
   const db = new BotDatabase("./data/bot.db");
 
-  const redemptions = new RedemptionLogger(
-    db,
-    config.rewards.loggedIds,
-    config.discordWebhookUrl,
-    "./data/redemptions.csv",
-  );
+  const redemptions = new RedemptionLogger(db, {
+    filterIds: config.rewards.loggedIds,
+    discordWebhookUrl: config.discordWebhookUrl,
+    googleSheetsWebhook: config.googleSheetsWebhook,
+    csvPath: "./data/redemptions.csv",
+  });
 
   const music = new MusicService({
     maxDurationSeconds: config.music.maxDurationSeconds,

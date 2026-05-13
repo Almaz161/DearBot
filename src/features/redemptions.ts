@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { BotDatabase, type RedemptionRow } from "../db.js";
+import { GoogleSheetsSink } from "./googleSheets.js";
 import { makeLogger } from "../logger.js";
 
 const log = makeLogger("redemptions");
@@ -12,16 +13,27 @@ function csvEscape(value: string): string {
   return value;
 }
 
+export type RedemptionLoggerOptions = {
+  filterIds: Set<string>;
+  discordWebhookUrl: string;
+  googleSheetsWebhook: string;
+  csvPath?: string;
+};
+
 export class RedemptionLogger {
   private readonly csvPath: string;
+  private readonly filterIds: Set<string>;
+  private readonly discordWebhookUrl: string;
+  private readonly sheets: GoogleSheetsSink | null;
 
   constructor(
     private readonly db: BotDatabase,
-    private readonly filterIds: Set<string>,
-    private readonly discordWebhookUrl: string,
-    csvPath = "./data/redemptions.csv",
+    opts: RedemptionLoggerOptions,
   ) {
-    this.csvPath = csvPath;
+    this.filterIds = opts.filterIds;
+    this.discordWebhookUrl = opts.discordWebhookUrl;
+    this.sheets = opts.googleSheetsWebhook ? new GoogleSheetsSink(opts.googleSheetsWebhook) : null;
+    this.csvPath = opts.csvPath ?? "./data/redemptions.csv";
     this.ensureCsvHeader();
   }
 
@@ -50,9 +62,10 @@ export class RedemptionLogger {
       `[reward] ${row.user_display} (${row.user_login}) redeemed "${row.reward_title}" (${row.reward_cost}): ${row.user_input || "<no input>"}`,
     );
 
-    if (this.discordWebhookUrl) {
-      await this.notifyDiscord(row);
-    }
+    const fanOut: Promise<unknown>[] = [];
+    if (this.discordWebhookUrl) fanOut.push(this.notifyDiscord(row));
+    if (this.sheets) fanOut.push(this.sheets.send(row));
+    if (fanOut.length) await Promise.allSettled(fanOut);
   }
 
   private appendCsv(row: RedemptionRow): void {
